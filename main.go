@@ -1,105 +1,60 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
-	"time"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/gorilla/websocket"
+	"github.com/unklearn/notebook-backend/connection"
+	containerservices "github.com/unklearn/notebook-backend/container-services"
 )
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
 
 var upgrader = websocket.Upgrader{} // use default options
 
-// Only allow images. Auto-host mount to /tmp folder and that's it.
-type IContainerService interface {
-	// Create a new container with image and tag as parameters. Returns the created container id
-	CreateNew(ctx context.Context, image string, tag string) (string, error)
-}
-
-type DockerContainerService struct {
-	client *client.Client
-}
-
-/// Create a new docker container with given image and tag
-func (dcs DockerContainerService) CreateNew(ctx context.Context, image string, tag string) (string, error) {
-	ctrConfig := container.Config{
-		Image: fmt.Sprintf("%s:%s", image, tag),
-		Cmd:   []string{"sleep", "infinity"},
-	}
-	hostConfig := container.HostConfig{
-		AutoRemove: true,
-	}
-	netConfig := network.NetworkingConfig{}
-	resp, err := dcs.client.ContainerCreate(ctx, &ctrConfig, &hostConfig, &netConfig, "")
-	if err != nil {
-		return "", err
-	}
-	if err := dcs.client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-		panic(err)
-	}
-	return resp.ID, nil
-}
-
-var dcs = DockerContainerService{}
+var dcs = containerservices.DockerContainerService{}
 
 func echo(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
+	// Maps execId to a multiplexed connection
+	mx := connection.MxedWebsocketConn{Conn: c, Delimiter: "::"}
+
+	var rootChannel = containerservices.RootChannel{RootConn: mx, Id: "root", ContainerService: dcs}
+
+	// Register channels
+	mx.RegisterChannel("root", &rootChannel)
+
 	if err != nil {
 		log.Print("upgrade:", err)
 		return
 	}
 	defer c.Close()
 
-	command := []string{"sh"}
-
-	execConfig := types.ExecConfig{Tty: true, AttachStdout: true, AttachStderr: true, AttachStdin: true, Cmd: command}
-	respIdExecCreate, err := dcs.client.ContainerExecCreate(context.Background(), "fb6baad62d00", execConfig)
-	if err != nil {
-		fmt.Println(err)
-	}
-	respId, err := dcs.client.ContainerExecAttach(context.Background(), respIdExecCreate.ID, execConfig)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	b := make([]byte, 1024)
-	ticker := time.Tick(time.Millisecond * 100)
-	go func() {
-		for {
-			n, err := respId.Reader.Read(b)
-			if err == io.EOF {
-				break
-			}
-			// Wait for next set
-			<-ticker
-			if len(b) > 0 {
-				c.WriteMessage(2, b[:n])
-			}
-		}
-		log.Println("Done reading")
-	}()
+	// b := make([]byte, 1024)
+	// ticker := time.Tick(time.Millisecond * 100)
+	// go func() {
+	// 	for {
+	// 		n, err := respId.Reader.Read(b)
+	// 		if err == io.EOF {
+	// 			break
+	// 		}
+	// 		// Wait for next set
+	// 		<-ticker
+	// 		if len(b) > 0 {
+	// 			mxed.WriteMessage(2, b[:n])
+	// 		}
+	// 	}
+	// 	log.Println("Done reading")
+	// }()
 
 	for {
-		_, message, err := c.ReadMessage()
+		err := mx.ReadMessage()
 		if err != nil {
 			log.Println("read:", err)
-			break
-		}
-		respId.Conn.Write(message)
-		if err != nil {
-			log.Println("write:", err)
 			break
 		}
 	}
@@ -111,32 +66,32 @@ func echo(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/websocket", echo)
 	http.HandleFunc("/", home)
-	http.HandleFunc("/container-create", contCreate)
+	// http.HandleFunc("/container-create", contCreate)
 	// Create new docker client
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		panic(err)
 	}
 	// Set client
-	dcs.client = cli
+	dcs.Client = cli
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
 
-func contCreate(w http.ResponseWriter, r *http.Request) {
-	queryParams := r.URL.Query()
-	image := queryParams.Get("image")
-	tag := queryParams.Get("tag")
-	if len(tag) == 0 {
-		tag = "latest"
-	}
-	id, err := dcs.CreateNew(r.Context(), image, tag)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, "{\"id\": \"%s\"}", id)
-}
+// func contCreate(w http.ResponseWriter, r *http.Request) {
+// 	queryParams := r.URL.Query()
+// 	image := queryParams.Get("image")
+// 	tag := queryParams.Get("tag")
+// 	if len(tag) == 0 {
+// 		tag = "latest"
+// 	}
+// 	id, err := dcs.CreateNew(r.Context(), image, tag)
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	fmt.Fprintf(w, "{\"id\": \"%s\"}", id)
+// }
 
 func home(w http.ResponseWriter, r *http.Request) {
 	homeTemplate.Execute(w, "ws://"+r.Host+"/websocket")
@@ -307,12 +262,12 @@ window.addEventListener("load", function(evt) {
         ws = new WebSocket("{{.}}");
         ws.onopen = function(evt) {
             print("OPEN");
-            const term = new Terminal({convertEol: true});
-const attachAddon = new AttachAddon.AttachAddon(ws, { bidirectional: true});
+//            const term = new Terminal({convertEol: true});
+//const attachAddon = new AttachAddon.AttachAddon(ws, { bidirectional: true});
 
 // Attach the socket to term
-term.loadAddon(attachAddon);
-term.open(document.getElementById('xterm-container'));
+//term.loadAddon(attachAddon);
+//term.open(document.getElementById('xterm-container'));
         }
         ws.onclose = function(evt) {
             print("CLOSE");
