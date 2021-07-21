@@ -60,6 +60,14 @@ func (mx *MxedWebsocketConn) ReadMessage() error {
 	if !ok {
 		// Log warning
 		log.Printf("Missing channelId %s", channelId)
+		keys := make([]string, len(mx.ChannelMap))
+
+		i := 0
+		for k := range mx.ChannelMap {
+			keys[i] = k
+			i++
+		}
+		log.Printf("keys %v", keys)
 		return nil
 	}
 	_, err = ch.Write(msg)
@@ -68,13 +76,18 @@ func (mx *MxedWebsocketConn) ReadMessage() error {
 
 // Register a new channel if another does not exist already
 func (mx *MxedWebsocketConn) RegisterChannel(channelId string, channel Channel) error {
-	if mx.ChannelMap == nil {
-		mx.ChannelMap = make(map[string]Channel)
-	}
+
 	// Check if channel exists
 	_, ok := mx.ChannelMap[channelId]
 	if !ok {
 		mx.ChannelMap[channelId] = channel
+		keys := make([]string, len(mx.ChannelMap))
+		i := 0
+		for k := range mx.ChannelMap {
+			keys[i] = k
+			i++
+		}
+		log.Printf("keys %v", keys)
 		return nil
 	} else {
 		return fmt.Errorf("another channel exists for channelId %s", channelId)

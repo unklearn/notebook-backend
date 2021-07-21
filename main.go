@@ -22,7 +22,10 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	// Maps execId to a multiplexed connection
 	mx := connection.MxedWebsocketConn{Conn: c, Delimiter: "::"}
-
+	if mx.ChannelMap == nil {
+		log.Print("Remaking ...")
+		mx.ChannelMap = make(map[string]connection.Channel)
+	}
 	var rootChannel = containerservices.RootChannel{RootConn: mx, Id: "root", ContainerService: dcs}
 
 	// Register channels
@@ -262,6 +265,9 @@ window.addEventListener("load", function(evt) {
         ws = new WebSocket("{{.}}");
         ws.onopen = function(evt) {
             print("OPEN");
+            ws.onmessage = function(e) {
+                print("MESSAGE" + e.data);
+            }
 //            const term = new Terminal({convertEol: true});
 //const attachAddon = new AttachAddon.AttachAddon(ws, { bidirectional: true});
 
@@ -308,7 +314,7 @@ You can change the message and send multiple times.
 <form>
 <button id="open">Open</button>
 <button id="close">Close</button>
-<p><input id="input" type="text" value="Hello world!">
+<p><textarea id="input" type="text" value="Hello world!"></textarea>
 <button id="send">Send</button>
 </form>
 </td><td valign="top" width="50%">

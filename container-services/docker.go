@@ -32,7 +32,7 @@ func (dcs DockerContainerService) CreateNew(ctx context.Context, image string, t
 	if err := dcs.Client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		panic(err)
 	}
-	cc := ContainerChannel{Id: resp.ID}
+	cc := ContainerChannel{Id: resp.ID[:4]}
 	return cc, nil
 }
 
