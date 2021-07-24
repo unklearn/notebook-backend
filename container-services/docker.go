@@ -47,5 +47,5 @@ func (dcs DockerContainerService) ExecuteCommand(ctx context.Context, containerI
 	if err != nil {
 		return ContainerCommandChannel{}, err
 	}
-	return ContainerCommandChannel{Id: containerId + "-" + respIdExecCreate.ID, ContainerId: containerId, ExecConn: respId.Conn, ExecReader: respId.Reader}, nil
+	return ContainerCommandChannel{Id: containerId + "-" + respIdExecCreate.ID[:4], ContainerId: containerId, ExecConn: respId.Conn, ExecReader: respId.Reader}, nil
 }

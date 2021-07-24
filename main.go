@@ -14,7 +14,13 @@ import (
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
 
-var upgrader = websocket.Upgrader{} // use default options
+func CheckOrigin(r *http.Request) bool {
+	return true
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: CheckOrigin,
+} // use default options
 
 var dcs = containerservices.DockerContainerService{}
 
@@ -23,7 +29,6 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	// Maps execId to a multiplexed connection
 	mx := connection.MxedWebsocketConn{Conn: c, Delimiter: "::"}
 	if mx.ChannelMap == nil {
-		log.Print("Remaking ...")
 		mx.ChannelMap = make(map[string]connection.Channel)
 	}
 	var rootChannel = containerservices.RootChannel{RootConn: mx, Id: "root", ContainerService: dcs}
@@ -36,23 +41,6 @@ func echo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer c.Close()
-
-	// b := make([]byte, 1024)
-	// ticker := time.Tick(time.Millisecond * 100)
-	// go func() {
-	// 	for {
-	// 		n, err := respId.Reader.Read(b)
-	// 		if err == io.EOF {
-	// 			break
-	// 		}
-	// 		// Wait for next set
-	// 		<-ticker
-	// 		if len(b) > 0 {
-	// 			mxed.WriteMessage(2, b[:n])
-	// 		}
-	// 	}
-	// 	log.Println("Done reading")
-	// }()
 
 	for {
 		err := mx.ReadMessage()

@@ -33,7 +33,6 @@ func (rc RootChannel) Write(message []byte) (int, error) {
 	m := f.(map[string]interface{})
 	// Look for exec handlers
 	action := m["Action"]
-	log.Print(action)
 	switch action {
 	case "start":
 		cc, err := rc.ContainerService.CreateNew(context.Background(), m["Image"].(string), m["Tag"].(string))
@@ -46,7 +45,7 @@ func (rc RootChannel) Write(message []byte) (int, error) {
 			cc.ContainerService = rc.ContainerService
 			rc.RootConn.RegisterChannel(id, cc)
 			// Write back on root channel the id of the container
-			rc.RootConn.WriteMessage(2, rc.GetId(), []byte(id))
+			rc.RootConn.WriteMessage(2, rc.GetId(), append([]byte("container-started::"), []byte(id)...))
 		}
 	case "sync":
 		containerId := m["ContainerId"].(string)
@@ -79,8 +78,7 @@ func (cc ContainerChannel) Write(message []byte) (int, error) {
 	// Look for exec handlers
 	action := m["Action"]
 	switch action {
-	case "exec-command":
-		log.Printf("%T\n", m["Command"])
+	case "exec-terminal":
 		// Convert to string
 		var strCommand []string
 		for _, el := range m["Command"].([]interface{}) {
@@ -95,9 +93,45 @@ func (cc ContainerChannel) Write(message []byte) (int, error) {
 			ccc.ContainerService = cc.ContainerService
 			id := ccc.GetId()
 			ccc.RootConn.RegisterChannel(id, ccc)
-			ccc.RootConn.WriteMessage(2, id, []byte(id))
+			ccc.RootConn.WriteMessage(2, "root", append([]byte("terminal-started::"), []byte(id)...))
+			time.Sleep(1 * time.Second)
 			go ccc.Listen()
 		}
+	case "sync-file":
+		filePath := m["Path"].(string)
+		fileContents := m["Content"]
+		var ccc ContainerCommandChannel
+		switch fileContents := fileContents.(type) {
+		case nil:
+			// Do not write file, simply sync
+			ccc, _ = cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, []string{"cat", filePath})
+		case string:
+			ccc, _ = cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, []string{"echo", fileContents, ">", filePath, "&&", "cat", filePath})
+		}
+		ccc.RootConn = cc.RootConn
+		// Immediately grab the output and send
+		b := make([]byte, 1024)
+		var contents []byte
+		go func() {
+			for {
+				n, err := ccc.ExecReader.Read(b)
+				if err == io.EOF {
+					break
+				}
+
+				if len(b) > 0 {
+					if contents == nil {
+						contents = b[:n]
+					} else {
+
+						contents = append(contents, b[:n]...)
+					}
+					contents = append(contents, []byte("\r\n")...)
+				}
+			}
+			ccc.RootConn.WriteMessage(2, "root", append([]byte("file-contents::"), contents...))
+		}()
+
 	}
 	return len(message), nil
 }
@@ -117,15 +151,13 @@ func (ccc ContainerCommandChannel) GetId() string {
 }
 
 func (ccc ContainerCommandChannel) Write(message []byte) (int, error) {
-	// Write it to underlying handler
-	log.Print("Writing message to connection handler")
 	return ccc.ExecConn.Write(message)
 }
 
 func (ccc ContainerCommandChannel) Listen() {
 	// Listen for messages on exec-reader
 	b := make([]byte, 1024)
-	ticker := time.Tick(time.Millisecond * 100)
+	//ticker := time.NewTicker(time.Millisecond * 100)
 	id := ccc.Id
 	go func() {
 		for {
@@ -134,9 +166,8 @@ func (ccc ContainerCommandChannel) Listen() {
 				break
 			}
 			// Wait for next set
-			<-ticker
+			// <-ticker.C
 			if len(b) > 0 {
-				log.Print(string(b[:n]))
 				ccc.RootConn.WriteMessage(2, id, b[:n])
 			}
 		}
@@ -148,4 +179,4 @@ func (ccc ContainerCommandChannel) Listen() {
 /// root::{"Action":"start","Image":"python","Tag":"3.6"}
 /// root::{"Action": "sync", "ContainerId": "af74"}
 /// af74::{"Action":"exec-command","Command": ["bash"]}
-/// af74-de5aa317c774859b50c6e8865fc298deeeb9b7fd69f26b0fa17961444655d3d9::ls
+/// af74-cd3d70cc51934f5d49a9871f2c461e996c90ec1273d78627ba343ef1c27086e3::ls
