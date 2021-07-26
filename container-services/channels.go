@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/unklearn/notebook-backend/connection"
@@ -35,7 +36,7 @@ func (rc RootChannel) Write(message []byte) (int, error) {
 	action := m["Action"]
 	switch action {
 	case "start":
-		cc, err := rc.ContainerService.CreateNew(context.Background(), m["Image"].(string), m["Tag"].(string))
+		cc, err := rc.ContainerService.CreateNew(context.Background(), m["Image"].(string), m["Tag"].(string), parseStringCommand(m["Command"].([]interface{})), parseStringCommand(m["Env"].([]interface{})), parseStringCommand(m["Ports"].([]interface{})))
 		if err != nil {
 			return len(message), err
 		} else {
@@ -67,6 +68,14 @@ func (cc ContainerChannel) GetId() string {
 	return cc.Id
 }
 
+func parseStringCommand(commands []interface{}) []string {
+	var strCommand []string = make([]string, 0)
+	for _, el := range commands {
+		strCommand = append(strCommand, el.(string))
+	}
+	return strCommand
+}
+
 func (cc ContainerChannel) Write(message []byte) (int, error) {
 	// Parse message intent
 	var f interface{}
@@ -80,11 +89,8 @@ func (cc ContainerChannel) Write(message []byte) (int, error) {
 	switch action {
 	case "exec-terminal":
 		// Convert to string
-		var strCommand []string
-		for _, el := range m["Command"].([]interface{}) {
-			strCommand = append(strCommand, el.(string))
-		}
-		ccc, err := cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, strCommand)
+
+		ccc, err := cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, parseStringCommand(m["Command"].([]interface{})), true)
 
 		if err != nil {
 			return len(message), err
@@ -99,38 +105,40 @@ func (cc ContainerChannel) Write(message []byte) (int, error) {
 		}
 	case "sync-file":
 		filePath := m["Path"].(string)
-		fileContents := m["Content"]
+		fileContents := m["Contents"]
 		var ccc ContainerCommandChannel
 		switch fileContents := fileContents.(type) {
 		case nil:
 			// Do not write file, simply sync
-			ccc, _ = cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, []string{"cat", filePath})
-		case string:
-			ccc, _ = cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, []string{"echo", fileContents, ">", filePath, "&&", "cat", filePath})
-		}
-		ccc.RootConn = cc.RootConn
-		// Immediately grab the output and send
-		b := make([]byte, 1024)
-		var contents []byte
-		go func() {
-			for {
-				n, err := ccc.ExecReader.Read(b)
-				if err == io.EOF {
-					break
-				}
-
-				if len(b) > 0 {
-					if contents == nil {
-						contents = b[:n]
-					} else {
-
-						contents = append(contents, b[:n]...)
+			ccc, _ = cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, []string{"cat", filePath}, true)
+			ccc.RootConn = cc.RootConn
+			// Immediately grab the output and send
+			b := make([]byte, 1024)
+			var contents []byte
+			go func() {
+				for {
+					n, err := ccc.ExecReader.Read(b)
+					if err == io.EOF {
+						break
 					}
-					contents = append(contents, []byte("\r\n")...)
+
+					if len(b) > 0 {
+						if contents == nil {
+							contents = b[:n]
+						} else {
+
+							contents = append(contents, b[:n]...)
+						}
+						contents = append(contents, []byte("\r\n")...)
+					}
 				}
-			}
-			ccc.RootConn.WriteMessage(2, "root", append([]byte("file-contents::"), contents...))
-		}()
+				ccc.RootConn.WriteMessage(2, "root", append([]byte("file-contents::"), contents...))
+			}()
+		case string:
+			cmd := "echo \"" + strings.ReplaceAll(fileContents, "\"", "\\\"") + "\" > " + filePath
+			fileCpCmd := []string{"sh", "-c", cmd}
+			cc.ContainerService.ExecuteCommand(context.Background(), cc.Id, fileCpCmd, false)
+		}
 
 	}
 	return len(message), nil
