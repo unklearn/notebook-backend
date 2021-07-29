@@ -5,7 +5,7 @@ import "encoding/json"
 // Intent objects
 type ActionIntent interface {
 	// Parse message payload
-	Parse(channelId string, payload []byte) error
+	GetIntentName() string
 }
 
 type ContainerNetworkOptions struct {
@@ -34,6 +34,10 @@ type ContainerCreateCommandIntent struct {
 	EnvVars []string `json:"env"`
 	// Start command to use
 	Command []string `json:"command"`
+}
+
+func (i ContainerCreateCommandIntent) GetIntentName() string {
+	return "ContainerCreateCommandIntent"
 }
 
 // Parse payload into container create command intent or return error if config is invalid
