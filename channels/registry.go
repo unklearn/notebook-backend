@@ -3,13 +3,7 @@ package channels
 import (
 	"errors"
 	"fmt"
-	"net"
 )
-
-type IChannel interface {
-	net.Conn
-	GetId()
-}
 
 type ChannelRegistry struct {
 	// Internal store for mapping channelId to channel

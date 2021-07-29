@@ -8,6 +8,13 @@ import (
 
 // Multiplexed websocket encoder writes mulitplexed messages onto underlying socket for a mxed websocket
 // This creates a websocket subprotocol for client to use
+
+// The protocol is faily simple
+//
+//  |----4 bytes----||----4 bytes----|-------channelId---------|--------eventName--------|payload
+//
+//  The first 4 bytes store length of channelId as uint32, and second 4 bytes store length of event name
+//  The parsed lengths are used to read in channelId and eventName and payload
 type MxedWebsocketSubprotocol struct {
 	subProtocolName string
 }
