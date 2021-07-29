@@ -13,13 +13,6 @@ import (
 	"github.com/unklearn/notebook-backend/connection"
 )
 
-type RootChannel struct {
-	Id string
-	connection.Channel
-	RootConn         connection.MxedWebsocketConn
-	ContainerService IContainerService
-}
-
 func (rc RootChannel) GetId() string {
 	return rc.Id
 }
@@ -57,11 +50,8 @@ func (rc RootChannel) Write(message []byte) (int, error) {
 	return len(message), nil
 }
 
-type ContainerChannel struct {
-	connection.Channel
-	Id               string
-	RootConn         connection.MxedWebsocketConn
-	ContainerService IContainerService
+func (rc RootChannel) Close() error {
+	return nil
 }
 
 func (cc ContainerChannel) GetId() string {
@@ -129,6 +119,7 @@ func (cc ContainerChannel) Write(message []byte) (int, error) {
 
 							contents = append(contents, b[:n]...)
 						}
+						log.Println(n)
 						contents = append(contents, []byte("\r\n")...)
 					}
 				}
@@ -145,7 +136,7 @@ func (cc ContainerChannel) Write(message []byte) (int, error) {
 }
 
 type ContainerCommandChannel struct {
-	connection.Channel
+	IChannel
 	Id               string
 	ContainerId      string
 	RootConn         connection.MxedWebsocketConn
