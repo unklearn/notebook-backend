@@ -42,7 +42,7 @@ func (e MxedWebsocketSubprotocol) Encode(channelId string, eventName string, mes
 	return buf.Bytes()
 }
 
-func (e MxedWebsocketSubprotocol) Decode(message []byte) (*DecodedMxWebsocketResponse, error) {
+func (e MxedWebsocketSubprotocol) Decode(message []byte) (DecodedMxWebsocketResponse, error) {
 	r := DecodedMxWebsocketResponse{}
 	// Read first 4 bytes, then next 4
 	channelIdSize := int(binary.BigEndian.Uint32(message[0:4]))
@@ -54,12 +54,12 @@ func (e MxedWebsocketSubprotocol) Decode(message []byte) (*DecodedMxWebsocketRes
 	r.Payload = message[channelIdSize+eventNameSize+8:]
 
 	if r.ChannelId == "" {
-		return nil, fmt.Errorf("ECODE::enc-dec-bad-channel-id::Missing channel Id")
+		return DecodedMxWebsocketResponse{}, fmt.Errorf("ECODE::enc-dec-bad-channel-id::Missing channel Id")
 	}
 	if r.EventName == "" {
-		return nil, fmt.Errorf("ECODE::enc-dec-bad-event-name::Missing event name")
+		return DecodedMxWebsocketResponse{}, fmt.Errorf("ECODE::enc-dec-bad-event-name::Missing event name")
 	}
-	return &r, nil
+	return r, nil
 }
 
 // Return the subprotocol name for the encoder

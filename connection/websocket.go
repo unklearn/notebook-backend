@@ -1,73 +1,42 @@
 package connection
 
-// import (
-// 	"errors"
-// 	"log"
+type IWebsocketConn interface {
+	WriteMessage(messageType int, payload []byte) error
+	ReadMessage() (messageType int, message []byte, err error)
+}
 
-// 	"github.com/gorilla/websocket"
-// )
+// A multiplexed websocket connection that is capable of writing logs and command outputs to
+// a single websocket connection
+type MxedWebsocketConn struct {
+	// The underlying original websocket connection
+	conn     IWebsocketConn
+	protocol *MxedWebsocketSubprotocol
+}
 
-// // A multiplexed websocket connection that is capable of writing logs and command outputs to
-// // a single websocket connection
-// type MxedWebsocketConn struct {
-// 	// The underlying original websocket connection
-// 	Conn      *websocket.Conn
-// 	Delimiter string
-// }
+func NewMxedWebsocketConn(conn IWebsocketConn) *MxedWebsocketConn {
+	return &MxedWebsocketConn{conn: conn, protocol: NewMxedWebsocketSubprotocol()}
+}
 
-// // Override the default write message to multiplex the message over a channelId. Messages
-// // sent over this channel will only reach the corresponding mxed websocket listening on
-// // this channel
-// // messageType indicates type of websocket message: text or binary.
-// // channelId & eventName can be used to target specific channels and actions.
-// func (mx *MxedWebsocketConn) WriteMessage(messageType int, channelId string, eventName, string, message []byte) {
-// 	// Encode channelId and eventName and bytes with encoder
-// 	message = append([]byte(channelId+mx.Delimiter), message...)
-// 	mx.Conn.WriteMessage(messageType, message)
-// }
+// Override the default write message to multiplex the message over a channelId. Messages
+// sent over this channel will only reach the corresponding mxed websocket listening on
+// this channel
+// messageType indicates type of websocket message: text or binary.
+// channelId & eventName can be used to target specific channels and actions.
+func (mx *MxedWebsocketConn) WriteMessage(channelId string, eventName string, message []byte) {
+	// Encode channelId and eventName and bytes with encoder
+	output := mx.protocol.Encode(channelId, eventName, message)
+	mx.conn.WriteMessage(2, output)
+}
 
-// // parse channelId and return channel id and actual message
-// func (mx *MxedWebsocketConn) parseChannelId(message []byte) (string, []byte) {
-// 	if len(mx.Delimiter) == 0 {
-// 		return "", message
-// 	}
-// 	currByte := mx.Delimiter[0]
-// 	len_delim := len(mx.Delimiter)
-// 	for i, b := range message {
-// 		if b == currByte {
-// 			if mx.Delimiter == string(message[i:len_delim+i]) {
-// 				return string(message[0:i]), message[(i + len_delim):]
-// 			}
-// 		}
-// 	}
-// 	return "", message
-// }
-
-// // Read message and dispatch to appropriate channels
-// func (mx *MxedWebsocketConn) ReadMessage() error {
-// 	_, message, err := mx.Conn.ReadMessage()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	channelId, msg := mx.parseChannelId(message)
-// 	if mx.ChannelMap == nil {
-// 		return errors.New("no channels have been registered yet")
-// 	}
-// 	// Check if channel exists
-// 	ch, ok := mx.ChannelMap[channelId]
-// 	if !ok {
-// 		// Log warning
-// 		log.Printf("Missing channelId %s", channelId)
-// 		keys := make([]string, len(mx.ChannelMap))
-
-// 		i := 0
-// 		for k := range mx.ChannelMap {
-// 			keys[i] = k
-// 			i++
-// 		}
-// 		log.Printf("keys %v", keys)
-// 		return nil
-// 	}
-// 	_, err = ch.Write(msg)
-// 	return err
-// }
+// Read message and return the appropriate channelId, eventName etc
+func (mx *MxedWebsocketConn) ReadMessage() (DecodedMxWebsocketResponse, error) {
+	_, message, err := mx.conn.ReadMessage()
+	if err != nil {
+		return DecodedMxWebsocketResponse{}, err
+	}
+	decoded, err := mx.protocol.Decode(message)
+	if err != nil {
+		return DecodedMxWebsocketResponse{}, err
+	}
+	return decoded, nil
+}

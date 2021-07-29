@@ -5,14 +5,14 @@ import (
 	"fmt"
 )
 
-type ChannelRegistry struct {
+type Registry struct {
 	// Internal store for mapping channelId to channel
 	channelMap map[string]IChannel
 }
 
 // RegisterChannel registers a channel against a channelId.
 // If a channel exists for given channelId, it returns an error
-func (cr *ChannelRegistry) RegisterChannel(channelId string, channel IChannel) error {
+func (cr *Registry) RegisterChannel(channelId string, channel IChannel) error {
 	if cr.channelMap == nil {
 		cr.channelMap = make(map[string]IChannel)
 	}
@@ -27,7 +27,7 @@ func (cr *ChannelRegistry) RegisterChannel(channelId string, channel IChannel) e
 
 // Deregister channel removes a channel from the store if it exists,
 // otherwise returns error
-func (cr *ChannelRegistry) DeregisterChannel(channelId string) (IChannel, error) {
+func (cr *Registry) DeregisterChannel(channelId string) (IChannel, error) {
 	if cr.channelMap == nil {
 		return nil, errors.New("ECODE::missing-map::Registry has not been initialized")
 	}
@@ -40,7 +40,7 @@ func (cr *ChannelRegistry) DeregisterChannel(channelId string) (IChannel, error)
 }
 
 // Return a channel by id if it exists, otherwise return error
-func (cr *ChannelRegistry) GetChannelById(channelId string) (IChannel, error) {
+func (cr *Registry) GetChannelById(channelId string) (IChannel, error) {
 	if cr.channelMap == nil {
 		return nil, errors.New("ECODE::missing-map::Registry has not been initialized")
 	}

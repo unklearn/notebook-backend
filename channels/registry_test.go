@@ -9,7 +9,7 @@ type dummyChannel struct {
 }
 
 func TestRegisterChannel(t *testing.T) {
-	cr := ChannelRegistry{}
+	cr := Registry{}
 	// Adding non-existing channel
 	var ch IChannel = dummyChannel{}
 	e := cr.RegisterChannel("dummy", ch)
@@ -24,7 +24,7 @@ func TestRegisterChannel(t *testing.T) {
 }
 
 func TestDeregisterChannel(t *testing.T) {
-	cr := ChannelRegistry{}
+	cr := Registry{}
 	// Adding non-existing channel
 	var ch IChannel = dummyChannel{}
 
@@ -55,7 +55,7 @@ func TestDeregisterChannel(t *testing.T) {
 }
 
 func TestGetChannelById(t *testing.T) {
-	cr := ChannelRegistry{}
+	cr := Registry{}
 	// Adding non-existing channel
 	var ch IChannel = dummyChannel{}
 
