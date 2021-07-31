@@ -10,9 +10,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/unklearn/notebook-backend/channels"
 	"github.com/unklearn/notebook-backend/commands"
-	"github.com/unklearn/notebook-backend/connection"
 )
 
 /// Implementation of Docker container service
@@ -24,17 +22,12 @@ type DockerContainerService struct {
 	networkMap map[string]types.NetworkResource
 }
 
-// Execute intents
-func (dcs DockerContainerService) ExecuteIntents(intents []commands.ActionIntent, channelRegistry *channels.Registry, conn *connection.MxedWebsocketConn) error {
-	for _, intent := range intents {
-		switch intent.(type) {
-		case commands.ContainerCreateCommandIntent:
-			return dcs.CreateNew(context.Background(), channelRegistry, conn, intent.(commands.ContainerCreateCommandIntent))
-		default:
-			return nil
-		}
-	}
-	return nil
+func (dcs DockerContainerService) GetClient() *client.Client {
+	return dcs.client
+}
+
+func NewDockerContainerService(c *client.Client) *DockerContainerService {
+	return &DockerContainerService{client: c}
 }
 
 // Create a new network for a channel if it does not exist. If it does exist, then
@@ -58,8 +51,28 @@ func (dcs DockerContainerService) createNetworkForChannel(ctx context.Context, c
 	return netinspectResponse, nil
 }
 
-/// Create a new docker container with given image and tag
-func (dcs DockerContainerService) CreateNew(ctx context.Context, channelRegistry *channels.Registry, conn *connection.MxedWebsocketConn, intent commands.ContainerCreateCommandIntent) error {
+func (dcs DockerContainerService) EnsureImage(ctx context.Context, image string, tag string, repoUrl string) error {
+	// TODO: Use repoUrl
+	_, e := dcs.client.ImageList(ctx, types.ImageListOptions{All: true})
+	if e != nil {
+		return e
+	}
+	return nil
+}
+
+// Return the status of a running container. If container is missing
+// error is returned
+func (dcs DockerContainerService) GetContainerStatus(ctx context.Context, containerId string) (string, error) {
+	ctr, e := dcs.client.ContainerInspect(ctx, containerId)
+	if e != nil {
+		return "", e
+	}
+	return ctr.State.Status, nil
+}
+
+// Create a new docker container with given image and tag
+// Returns containerId and err if any
+func (dcs DockerContainerService) CreateNew(ctx context.Context, intent commands.ContainerCreateCommandIntent) (string, error) {
 
 	exposedPorts := make(map[nat.Port]struct{})
 	portMap := make(map[nat.Port][]nat.PortBinding)
@@ -84,7 +97,7 @@ func (dcs DockerContainerService) CreateNew(ctx context.Context, channelRegistry
 	// Network for channel
 	channelNetwork, e := dcs.createNetworkForChannel(ctx, intent.ChannelId)
 	if e != nil {
-		return e
+		return "", e
 	}
 	endpointsConfig := make(map[string]*network.EndpointSettings)
 	endpointsConfig[channelNetwork.Name] = &network.EndpointSettings{
@@ -98,10 +111,10 @@ func (dcs DockerContainerService) CreateNew(ctx context.Context, channelRegistry
 		OS:           "linux",
 	}, "")
 	if err != nil {
-		return err
+		return "", err
 	}
 	err = dcs.client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
-	return err
+	return resp.ID, err
 }
 
 // func (dcs DockerContainerService) ExecuteCommand(ctx context.Context, containerId string, command []string, useTty bool) (ContainerCommandChannel, error) {

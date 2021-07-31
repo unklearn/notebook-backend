@@ -50,6 +50,29 @@ func (i *ContainerCreateCommandIntent) Parse(channelId string, payload []byte) e
 	return nil
 }
 
+// Ensure that the provided image and tag exists on the system
+type ImagePullCommandIntent struct {
+	Image   string
+	Tag     string
+	RepoUrl string
+}
+
+func (i ImagePullCommandIntent) GetIntentName() string {
+	return "ImagePullCommandIntent"
+}
+
+// Wait for a container to be started, sometimes images do not exist, and images
+// must be pulled
+type ContainerWaitCommandIntent struct {
+	ContainerId string
+	// Timeout in seconds
+	Timeout int
+}
+
+func (i ContainerWaitCommandIntent) GetIntentName() string {
+	return "ContainerWaitCommandIntent"
+}
+
 // An intent that can be used to execute a command inside container
 type ContainerExecuteCommandIntent struct {
 	// Id of the connection, can be notebookId or userId

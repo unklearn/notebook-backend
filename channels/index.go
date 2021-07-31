@@ -7,8 +7,8 @@ import (
 )
 
 type IChannel interface {
-	HandleMessage(eventName string, payload []byte) (commands.ActionIntent, error)
-	GetId()
+	HandleMessage(eventName string, payload []byte) ([]commands.ActionIntent, error)
+	GetId() string
 }
 
 // RootChannel is used by the notebook to communicate any top level socket events
@@ -27,8 +27,10 @@ func NewRootChannel(id string) *RootChannel {
 type RootChannelEventNames string
 
 const (
-	ContainerStartEventName RootChannelEventNames = "container:start"
-	ContainerStopEventName  RootChannelEventNames = "container:stop"
+	ContainerStartEventName   RootChannelEventNames = "container:start"
+	ContainerStopEventName    RootChannelEventNames = "container:stop"
+	ContainerStartedEventName RootChannelEventNames = "container:started"
+	ContainerStatusEventName  RootChannelEventNames = "container:status"
 )
 
 // Return id for external callers
@@ -44,9 +46,52 @@ func (rc RootChannel) HandleMessage(eventName string, payload []byte) ([]command
 		// Parse body into StartContainer
 		c := commands.ContainerCreateCommandIntent{}
 		c.Parse(rc.id, payload)
-		return []commands.ActionIntent{&c}, nil
+		return []commands.ActionIntent{&commands.ImagePullCommandIntent{
+			Image: c.Image,
+			Tag:   c.ImageTag,
+		}, &c}, nil
 	default:
 		break
 	}
+	return []commands.ActionIntent{}, fmt.Errorf("unknown event name %s", eventName)
+}
+
+// A container channel wraps a single container
+// and can be used to perform actions inside the container
+type ContainerChannel struct {
+	// id of the channel
+	id string
+}
+
+func NewContainerChannel(id string) *ContainerChannel {
+	return &ContainerChannel{id: id}
+}
+
+type ContainerChannelEventNames string
+
+const (
+	ExecuteCommand ContainerChannelEventNames = "execute:command"
+	CommandStatus  ContainerChannelEventNames = "command:status"
+	ReadFile       ContainerChannelEventNames = "read:file"
+	WriteToFile    ContainerChannelEventNames = "write:file"
+)
+
+// Return id for external callers
+func (cc ContainerChannel) GetId() string {
+	return cc.id
+}
+
+// HandleMessage takes care of a given event and payload. If payload cannot be handled, error
+// is returned
+func (cc ContainerChannel) HandleMessage(eventName string, payload []byte) ([]commands.ActionIntent, error) {
+	// switch eventName {
+	// case ExecuteCommand:
+	// 	// Parse body into StartContainer
+	// 	c := commands.ContainerExecuteCommandIntent{}
+	// 	c.Parse(cc.id, payload)
+	// 	return []commands.ActionIntent{&c}, nil
+	// default:
+	// 	break
+	// }
 	return []commands.ActionIntent{}, fmt.Errorf("unknown event name %s", eventName)
 }

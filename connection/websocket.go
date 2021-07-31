@@ -1,5 +1,7 @@
 package connection
 
+import "github.com/unklearn/notebook-backend/channels"
+
 type IWebsocketConn interface {
 	WriteMessage(messageType int, payload []byte) error
 	ReadMessage() (messageType int, message []byte, err error)
@@ -11,10 +13,11 @@ type MxedWebsocketConn struct {
 	// The underlying original websocket connection
 	conn     IWebsocketConn
 	protocol *MxedWebsocketSubprotocol
+	*channels.Registry
 }
 
 func NewMxedWebsocketConn(conn IWebsocketConn) *MxedWebsocketConn {
-	return &MxedWebsocketConn{conn: conn, protocol: NewMxedWebsocketSubprotocol()}
+	return &MxedWebsocketConn{conn: conn, protocol: NewMxedWebsocketSubprotocol(), Registry: &channels.Registry{}}
 }
 
 // Override the default write message to multiplex the message over a channelId. Messages
