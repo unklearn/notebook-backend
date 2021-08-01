@@ -48,7 +48,6 @@ func (e MxedWebsocketSubprotocol) Decode(message []byte) (DecodedMxWebsocketResp
 	// Read first 4 bytes, then next 4
 	channelIdSize := int(binary.LittleEndian.Uint32(message[0:4]))
 	eventNameSize := int(binary.LittleEndian.Uint32(message[4:8]))
-
 	// Truncate sizes to a max so that we don't read out of bounds
 	if channelIdSize > 256 || eventNameSize > 256 {
 		return r, errors.New("channel id or event name must be less than 256 characters")
