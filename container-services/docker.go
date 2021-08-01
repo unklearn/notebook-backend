@@ -6,7 +6,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -95,21 +94,21 @@ func (dcs DockerContainerService) CreateNew(ctx context.Context, intent commands
 	}
 
 	// Network for channel
-	channelNetwork, e := dcs.createNetworkForChannel(ctx, intent.ChannelId)
-	if e != nil {
-		return "", e
-	}
-	endpointsConfig := make(map[string]*network.EndpointSettings)
-	endpointsConfig[channelNetwork.Name] = &network.EndpointSettings{
-		NetworkID: channelNetwork.ID,
-	}
-	netConfig := network.NetworkingConfig{
-		EndpointsConfig: endpointsConfig,
-	}
-	resp, err := dcs.client.ContainerCreate(ctx, &ctrConfig, &hostConfig, &netConfig, &v1.Platform{
+	// channelNetwork, e := dcs.createNetworkForChannel(ctx, intent.ChannelId)
+	// if e != nil {
+	// 	return "", e
+	// }
+	// endpointsConfig := make(map[string]*network.EndpointSettings)
+	// endpointsConfig[channelNetwork.Name] = &network.EndpointSettings{
+	// 	NetworkID: channelNetwork.ID,
+	// }
+	// netConfig := network.NetworkingConfig{
+	// 	EndpointsConfig: endpointsConfig,
+	// }
+	resp, err := dcs.client.ContainerCreate(ctx, &ctrConfig, &hostConfig, nil, &v1.Platform{
 		Architecture: "amd64",
 		OS:           "linux",
-	}, "")
+	}, intent.Name)
 	if err != nil {
 		return "", err
 	}

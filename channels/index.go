@@ -44,12 +44,11 @@ func (rc RootChannel) HandleMessage(eventName string, payload []byte) ([]command
 	switch eventName {
 	case string(ContainerStartEventName):
 		// Parse body into StartContainer
-		c := commands.ContainerCreateCommandIntent{}
-		c.Parse(rc.id, payload)
-		return []commands.ActionIntent{&commands.ImagePullCommandIntent{
-			Image: c.Image,
-			Tag:   c.ImageTag,
-		}, &c}, nil
+		c, e := commands.NewContainerCreateCommandIntent(rc.id, payload)
+		if e != nil {
+			return []commands.ActionIntent{}, e
+		}
+		return []commands.ActionIntent{c}, nil
 	default:
 		break
 	}

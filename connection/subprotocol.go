@@ -3,6 +3,7 @@ package connection
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 )
 
@@ -32,8 +33,8 @@ func (e MxedWebsocketSubprotocol) Encode(channelId string, eventName string, mes
 	buf := bytes.NewBuffer(dst)
 	channelIdLen := make([]byte, 4)
 	eventNameLen := make([]byte, 4)
-	binary.BigEndian.PutUint32(channelIdLen, uint32(len(channelId)))
-	binary.BigEndian.PutUint32(eventNameLen, uint32(len(eventName)))
+	binary.LittleEndian.PutUint32(channelIdLen, uint32(len(channelId)))
+	binary.LittleEndian.PutUint32(eventNameLen, uint32(len(eventName)))
 	buf.Write(channelIdLen)
 	buf.Write([]byte(eventNameLen))
 	buf.Write([]byte(channelId))
@@ -45,8 +46,13 @@ func (e MxedWebsocketSubprotocol) Encode(channelId string, eventName string, mes
 func (e MxedWebsocketSubprotocol) Decode(message []byte) (DecodedMxWebsocketResponse, error) {
 	r := DecodedMxWebsocketResponse{}
 	// Read first 4 bytes, then next 4
-	channelIdSize := int(binary.BigEndian.Uint32(message[0:4]))
-	eventNameSize := int(binary.BigEndian.Uint32(message[4:8]))
+	channelIdSize := int(binary.LittleEndian.Uint32(message[0:4]))
+	eventNameSize := int(binary.LittleEndian.Uint32(message[4:8]))
+
+	// Truncate sizes to a max so that we don't read out of bounds
+	if channelIdSize > 256 || eventNameSize > 256 {
+		return r, errors.New("channel id or event name must be less than 256 characters")
+	}
 
 	// Parse channelId and eventName
 	r.ChannelId = string(message[8 : channelIdSize+8])

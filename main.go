@@ -24,7 +24,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: CheckOrigin,
 } // use default options
 
-func echo(w http.ResponseWriter, r *http.Request) {
+func HandleWS(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	// Maps execId to a multiplexed connection
 	mx := connection.NewMxedWebsocketConn(c)
@@ -36,34 +36,25 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.Close()
 	executor := NewCommandExecutor(dcs, mx)
-	go executor.ExecuteIntents()
-	for {
-		d, err := mx.ReadMessage()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		ch, e := mx.GetChannelById(d.ChannelId)
-		if e != nil {
-			// Respond with bad error-code
-			break
-		}
-		intents, _ := ch.HandleMessage(d.EventName, d.Payload)
-		go executor.DispatchIntents(intents)
-	}
+	// Run connector handler
+	executor.ConnectionHandler()
 }
 
 // Main serve function that runs the HTTP handler routes as well as the websocker handler.
 // The routes will handle notebook related API calls, and the websocket will relay container
 // outputs and execution status of a cell.
 func main() {
-	http.HandleFunc("/websocket", echo)
 	// http.HandleFunc("/container-create", contCreate)
 	// Create new docker client
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts()
 	if err != nil {
 		panic(err)
 	}
 	dcs = containerservices.NewDockerContainerService(cli)
+
+	// Register websocket handler
+	http.HandleFunc("/websocket", HandleWS)
+	log.Printf("Listening on %v\n", *addr)
+	// Listen and serve
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

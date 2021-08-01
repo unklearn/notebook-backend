@@ -1,11 +1,17 @@
 package commands
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"strings"
+)
 
 // Intent objects
 type ActionIntent interface {
 	// Parse message payload
 	GetIntentName() string
+	ToString() string
 }
 
 type ContainerNetworkOptions struct {
@@ -40,14 +46,40 @@ func (i ContainerCreateCommandIntent) GetIntentName() string {
 	return "ContainerCreateCommandIntent"
 }
 
-// Parse payload into container create command intent or return error if config is invalid
-func (i *ContainerCreateCommandIntent) Parse(channelId string, payload []byte) error {
-	err := json.Unmarshal(payload, i)
-	i.ChannelId = channelId
-	if err != nil {
-		return err
+// Print string version of intent
+func (i ContainerCreateCommandIntent) ToString() string {
+	return fmt.Sprintf("%#v", i)
+}
+
+// Factory method that supplies new intent or error, when supplied with JSON
+// representation of body
+func NewContainerCreateCommandIntent(channelId string, payload []byte) (ContainerCreateCommandIntent, error) {
+	i := ContainerCreateCommandIntent{
+		ChannelId: channelId,
 	}
-	return nil
+	err := json.Unmarshal(payload, &i)
+	if err != nil {
+		log.Printf("Error while unmarshalling container input: %s", err.Error())
+		return i, fmt.Errorf("invalid input supplied for creating container")
+	}
+	errors := []string{}
+	// Check for other parameters
+	if i.Name == "" {
+		errors = append(errors, "`name` is a required field")
+	}
+	if i.Image == "" {
+		errors = append(errors, "`image` is a required field")
+	}
+	if i.ImageTag == "" {
+		errors = append(errors, "`tag` is a required field")
+	}
+	if len(i.Command) == 0 {
+		errors = append(errors, "`command` cannot be empty")
+	}
+	if len(errors) > 0 {
+		return i, fmt.Errorf(strings.Join(errors, "\n"))
+	}
+	return i, nil
 }
 
 // Ensure that the provided image and tag exists on the system
@@ -71,6 +103,10 @@ type ContainerWaitCommandIntent struct {
 
 func (i ContainerWaitCommandIntent) GetIntentName() string {
 	return "ContainerWaitCommandIntent"
+}
+
+func (i ContainerWaitCommandIntent) ToString() string {
+	return fmt.Sprintf("%#v", i)
 }
 
 // An intent that can be used to execute a command inside container

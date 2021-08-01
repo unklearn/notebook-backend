@@ -3,6 +3,7 @@ package channels
 import (
 	"errors"
 	"fmt"
+	"log"
 )
 
 type Registry struct {
@@ -13,6 +14,7 @@ type Registry struct {
 // RegisterChannel registers a channel against a channelId.
 // If a channel exists for given channelId, it returns an error
 func (cr *Registry) RegisterChannel(channelId string, channel IChannel) error {
+	log.Printf("Registering new channel %s\n", channelId)
 	if cr.channelMap == nil {
 		cr.channelMap = make(map[string]IChannel)
 	}

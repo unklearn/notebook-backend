@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"time"
 
 	"github.com/unklearn/notebook-backend/channels"
@@ -42,6 +43,7 @@ func (ce CommandExecutor) CreateNewContainerSaga(intent commands.ContainerCreate
 	conn := ce.conn
 
 	if err != nil {
+		log.Println(err.Error())
 		// Write a message stating that container has failed
 		conn.WriteMessage(intent.ChannelId, string(channels.ContainerStatusEventName), failed)
 		return
@@ -98,12 +100,16 @@ func (ce CommandExecutor) WaitForContainerSaga(intent commands.ContainerWaitComm
 func (ce CommandExecutor) ExecuteIntents() {
 	// Create a container channel and register it
 	for intent := range ce.dispatch {
+		log.Printf("Handling intent %s\n", intent.ToString())
 		switch i := intent.(type) {
 		case commands.ContainerCreateCommandIntent:
 			ce.CreateNewContainerSaga(i)
+			continue
 		case commands.ContainerWaitCommandIntent:
 			ce.WaitForContainerSaga(i)
+			continue
 		default:
+			log.Printf("Got typo %T\n", intent)
 			continue
 		}
 	}
@@ -112,5 +118,30 @@ func (ce CommandExecutor) ExecuteIntents() {
 func (ce CommandExecutor) DispatchIntents(intents []commands.ActionIntent) {
 	for _, intent := range intents {
 		ce.dispatch <- intent
+	}
+}
+
+func (ce CommandExecutor) ConnectionHandler() {
+	mx := ce.conn
+	go ce.ExecuteIntents()
+	for {
+		d, err := mx.ReadMessage()
+		if err != nil {
+			log.Println("Error while reading from connection:", err)
+			break
+		}
+		ch, e := mx.GetChannelById(d.ChannelId)
+		if e != nil {
+			// Respond with bad error-code
+			log.Printf("Error while retrieving channel %s", d.ChannelId)
+			continue
+		}
+		intents, e := ch.HandleMessage(d.EventName, d.Payload)
+		if e != nil {
+			// Write the error to the end user
+			mx.WriteMessage(d.ChannelId, d.EventName, []byte(e.Error()))
+		}
+		// Dispatch intents
+		ce.DispatchIntents(intents)
 	}
 }
