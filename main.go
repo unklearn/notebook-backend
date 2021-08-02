@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/docker/docker/client"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/unklearn/notebook-backend/channels"
 	"github.com/unklearn/notebook-backend/connection"
@@ -28,10 +29,14 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	// Maps execId to a multiplexed connection
 	mx := connection.NewMxedWebsocketConn(c)
-	mx.RegisterChannel("root", channels.NewRootChannel("root"))
+	// Use the path for registering channels to conn
+	vars := mux.Vars(r)
+	rootChName := vars["notebookId"]
+	log.Println(rootChName)
+	mx.RegisterChannel(rootChName, channels.NewRootChannel(rootChName))
 
 	if err != nil {
-		log.Print("upgrade:", err)
+		log.Print("upgrade error:", err)
 		return
 	}
 	defer c.Close()
@@ -47,13 +52,15 @@ func main() {
 	// http.HandleFunc("/container-create", contCreate)
 	// Create new docker client
 	cli, err := client.NewClientWithOpts()
+	router := mux.NewRouter()
 	if err != nil {
 		panic(err)
 	}
 	dcs = containerservices.NewDockerContainerService(cli)
 
 	// Register websocket handler
-	http.HandleFunc("/websocket", HandleWS)
+	router.HandleFunc("/websocket/{notebookId}", HandleWS)
+	http.Handle("/", router)
 	log.Printf("Listening on %v\n", *addr)
 	// Listen and serve
 	log.Fatal(http.ListenAndServe(*addr, nil))

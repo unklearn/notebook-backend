@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -29,25 +31,29 @@ func NewDockerContainerService(c *client.Client) *DockerContainerService {
 	return &DockerContainerService{client: c}
 }
 
+const NETWORK_NAME = "unk_default_network"
+
 // Create a new network for a channel if it does not exist. If it does exist, then
 // simply return it. This function is idempotent
-func (dcs DockerContainerService) createNetworkForChannel(ctx context.Context, channelId string) (types.NetworkResource, error) {
+func (dcs DockerContainerService) createNetworkForChannel(ctx context.Context) (types.NetworkResource, error) {
 	// Check if there exists a network with channelId
 	dummyResp := types.NetworkResource{}
-	netinspectResponse, err := dcs.client.NetworkInspect(ctx, channelId, types.NetworkInspectOptions{})
+	netLsResponse, err := dcs.client.NetworkList(ctx, types.NetworkListOptions{
+		Filters: filters.NewArgs(filters.KeyValuePair{Key: "name", Value: NETWORK_NAME}, filters.KeyValuePair{Key: "type", Value: "custom"}),
+	})
 	if err != nil {
-		if client.IsErrNotFound(err) {
-			// Create network and return
-			_, e := dcs.client.NetworkCreate(ctx, channelId, types.NetworkCreate{})
-			if e != nil {
-				return dummyResp, e
-			} else {
-				return dcs.client.NetworkInspect(ctx, channelId, types.NetworkInspectOptions{})
-			}
-		}
 		return dummyResp, err
 	}
-	return netinspectResponse, nil
+	if len(netLsResponse) == 1 && err == nil {
+		return netLsResponse[0], nil
+	} else {
+		networkResponse, e := dcs.client.NetworkCreate(ctx, NETWORK_NAME, types.NetworkCreate{})
+		if e != nil {
+			return dummyResp, e
+		} else {
+			return dcs.client.NetworkInspect(ctx, networkResponse.ID, types.NetworkInspectOptions{})
+		}
+	}
 }
 
 func (dcs DockerContainerService) EnsureImage(ctx context.Context, image string, tag string, repoUrl string) error {
@@ -94,18 +100,18 @@ func (dcs DockerContainerService) CreateNew(ctx context.Context, intent commands
 	}
 
 	// Network for channel
-	// channelNetwork, e := dcs.createNetworkForChannel(ctx, intent.ChannelId)
-	// if e != nil {
-	// 	return "", e
-	// }
-	// endpointsConfig := make(map[string]*network.EndpointSettings)
-	// endpointsConfig[channelNetwork.Name] = &network.EndpointSettings{
-	// 	NetworkID: channelNetwork.ID,
-	// }
-	// netConfig := network.NetworkingConfig{
-	// 	EndpointsConfig: endpointsConfig,
-	// }
-	resp, err := dcs.client.ContainerCreate(ctx, &ctrConfig, &hostConfig, nil, &v1.Platform{
+	channelNetwork, e := dcs.createNetworkForChannel(ctx)
+	if e != nil {
+		return "", e
+	}
+	endpointsConfig := make(map[string]*network.EndpointSettings)
+	endpointsConfig[channelNetwork.Name] = &network.EndpointSettings{
+		NetworkID: channelNetwork.ID,
+	}
+	netConfig := network.NetworkingConfig{
+		EndpointsConfig: endpointsConfig,
+	}
+	resp, err := dcs.client.ContainerCreate(ctx, &ctrConfig, &hostConfig, &netConfig, &v1.Platform{
 		Architecture: "amd64",
 		OS:           "linux",
 	}, intent.Name)
