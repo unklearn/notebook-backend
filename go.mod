@@ -3,6 +3,7 @@ module github.com/unklearn/notebook-backend
 go 1.16
 
 require (
+	github.com/HouzuoGuo/tiedot v0.0.0-20200330175510-6fb216206052 // indirect
 	github.com/containerd/containerd v1.5.5 // indirect
 	github.com/docker/docker v20.10.7+incompatible
 	github.com/docker/go-connections v0.4.0

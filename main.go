@@ -11,6 +11,7 @@ import (
 	"github.com/unklearn/notebook-backend/channels"
 	"github.com/unklearn/notebook-backend/connection"
 	containerservices "github.com/unklearn/notebook-backend/container-services"
+	"github.com/unklearn/notebook-backend/notebooks"
 )
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
@@ -32,7 +33,6 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 	// Use the path for registering channels to conn
 	vars := mux.Vars(r)
 	rootChName := vars["notebookId"]
-	log.Println(rootChName)
 	mx.RegisterChannel(rootChName, channels.NewRootChannel(rootChName))
 
 	if err != nil {
@@ -49,7 +49,6 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 // The routes will handle notebook related API calls, and the websocket will relay container
 // outputs and execution status of a cell.
 func main() {
-	// http.HandleFunc("/container-create", contCreate)
 	// Create new docker client
 	cli, err := client.NewClientWithOpts()
 	router := mux.NewRouter()
@@ -60,6 +59,9 @@ func main() {
 
 	// Register websocket handler
 	router.HandleFunc("/websocket/{notebookId}", HandleWS)
+	router.HandleFunc("/notebooks", notebooks.NotebooksHandler)
+	router.HandleFunc("/notebooks/{notebookId}", notebooks.NotebookHandler)
+	// Root router route
 	http.Handle("/", router)
 	log.Printf("Listening on %v\n", *addr)
 	// Listen and serve
