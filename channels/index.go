@@ -1,7 +1,6 @@
 package channels
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/unklearn/notebook-backend/commands"
@@ -70,10 +69,10 @@ func NewContainerChannel(id string) *ContainerChannel {
 type ContainerChannelEventNames string
 
 const (
-	ExecuteCommand ContainerChannelEventNames = "execute:command"
-	CommandStatus  ContainerChannelEventNames = "command:status"
-	ReadFile       ContainerChannelEventNames = "read:file"
-	WriteToFile    ContainerChannelEventNames = "write:file"
+	ContainerExecuteCommandEventName ContainerChannelEventNames = "container/execute:command"
+	ContainerCommandStatusEventName  ContainerChannelEventNames = "container/command:status"
+	ContainerReadFile                ContainerChannelEventNames = "container/read:file"
+	ContainerWriteToFile             ContainerChannelEventNames = "container/write:file"
 )
 
 // Return id for external callers
@@ -85,12 +84,13 @@ func (cc ContainerChannel) GetId() string {
 // is returned
 func (cc ContainerChannel) HandleMessage(eventName string, payload []byte) ([]commands.ActionIntent, error) {
 	switch eventName {
-	case string(ExecuteCommand):
+	case string(ContainerExecuteCommandEventName):
 		// Parse body into StartContainer
-		var cmd []string
-		json.Unmarshal(payload, &cmd)
-		c := commands.NewContainerExecuteCommandIntent(cc.id, true, true, -1, cmd)
-		return []commands.ActionIntent{*c}, nil
+		c, e := commands.NewContainerExecuteCommandIntent(cc.id, payload)
+		if e != nil {
+			return []commands.ActionIntent{}, e
+		}
+		return []commands.ActionIntent{c}, nil
 	default:
 		break
 	}

@@ -133,14 +133,14 @@ func (i ContainerExecuteCommandIntent) ToString() string {
 }
 
 // Function to create a new container execute command intent
-func NewContainerExecuteCommandIntent(containerId string, payload []byte) (*ContainerExecuteCommandIntent, error) {
+func NewContainerExecuteCommandIntent(containerId string, payload []byte) (ContainerExecuteCommandIntent, error) {
 	c := ContainerExecuteCommandIntent{ContainerId: containerId}
 	e := json.Unmarshal(payload, &c)
 	if len(c.Command) == 0 {
 		e = errors.New("command cannot be empty")
 	}
 	if e != nil {
-		return nil, e
+		return ContainerExecuteCommandIntent{}, e
 	}
-	return &c, nil
+	return c, nil
 }

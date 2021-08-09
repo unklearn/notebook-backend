@@ -25,3 +25,12 @@ func TestHandleMessageUnknownType(t *testing.T) {
 	_, err := rc.HandleMessage("many", []byte(`{"container_id": "foo"}`))
 	assert.NotEqual(t, err, nil, "Should only handle known messages")
 }
+
+func TestContainerChannelExecuteCommand(t *testing.T) {
+	cc := NewContainerChannel("foo")
+	payload := []byte(`{"command": ["bash"]}`)
+	intents, e := cc.HandleMessage(string(ExecuteCommandEventName), payload)
+	assert.Equal(t, e, nil)
+	c, _ := commands.NewContainerExecuteCommandIntent("foo", payload)
+	assert.Equal(t, intents[0], c)
+}
