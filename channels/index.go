@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/unklearn/notebook-backend/commands"
@@ -83,14 +84,15 @@ func (cc ContainerChannel) GetId() string {
 // HandleMessage takes care of a given event and payload. If payload cannot be handled, error
 // is returned
 func (cc ContainerChannel) HandleMessage(eventName string, payload []byte) ([]commands.ActionIntent, error) {
-	// switch eventName {
-	// case ExecuteCommand:
-	// 	// Parse body into StartContainer
-	// 	c := commands.ContainerExecuteCommandIntent{}
-	// 	c.Parse(cc.id, payload)
-	// 	return []commands.ActionIntent{&c}, nil
-	// default:
-	// 	break
-	// }
+	switch eventName {
+	case string(ExecuteCommand):
+		// Parse body into StartContainer
+		var cmd []string
+		json.Unmarshal(payload, &cmd)
+		c := commands.NewContainerExecuteCommandIntent(cc.id, true, true, -1, cmd)
+		return []commands.ActionIntent{*c}, nil
+	default:
+		break
+	}
 	return []commands.ActionIntent{}, fmt.Errorf("unknown event name %s", eventName)
 }

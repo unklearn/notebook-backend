@@ -3,7 +3,6 @@ package notebooks
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -27,23 +26,21 @@ func handleNotebookCreate(w http.ResponseWriter, r *http.Request) {
 	r.Body.Read(p)
 	var payload map[string]interface{}
 	json.Unmarshal(p, &payload)
-	id, err := nbService.Create(payload)
+	nb, err := nbService.Create(payload)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid notebook payload")
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, map[string]interface{}{"id": id})
+	respondWithJSON(w, http.StatusCreated, nb)
 }
 
 func handleNotebookGet(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	notebookId, err := strconv.Atoi(vars["notebookId"])
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid notebookId")
-	}
+	notebookId := vars["notebookId"]
 	n, e := nbService.GetById(notebookId)
 	if e != nil {
 		respondWithError(w, http.StatusNotFound, "Cannot find notebook")
+		return
 	}
 	respondWithJSON(w, http.StatusOK, n)
 }

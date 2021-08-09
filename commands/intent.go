@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -111,14 +112,35 @@ func (i ContainerWaitCommandIntent) ToString() string {
 
 // An intent that can be used to execute a command inside container
 type ContainerExecuteCommandIntent struct {
-	// Id of the connection, can be notebookId or userId
-	ConnectionId string
 	// Id of container
-	ContainerId string
+	ContainerId string `json:"-"`
 	// Whether command can accept stdin
-	Interactive bool
+	Interactive bool `json:"interactive,omitempty"`
 	// Whether command requires tty
-	UseTty bool
+	UseTty bool `json:"use_tty,omitempty"`
 	// Used to timeout commands if necessary
-	Timeout int64
+	Timeout int `json:"timeout,omitempty"`
+	// The command to execute along with args
+	Command []string `json:"command"`
+}
+
+func (i ContainerExecuteCommandIntent) GetIntentName() string {
+	return "ContainerExecuteCommandIntent"
+}
+
+func (i ContainerExecuteCommandIntent) ToString() string {
+	return fmt.Sprintf("%#v", i)
+}
+
+// Function to create a new container execute command intent
+func NewContainerExecuteCommandIntent(containerId string, payload []byte) (*ContainerExecuteCommandIntent, error) {
+	c := ContainerExecuteCommandIntent{ContainerId: containerId}
+	e := json.Unmarshal(payload, &c)
+	if len(c.Command) == 0 {
+		e = errors.New("command cannot be empty")
+	}
+	if e != nil {
+		return nil, e
+	}
+	return &c, nil
 }

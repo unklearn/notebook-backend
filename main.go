@@ -59,8 +59,8 @@ func main() {
 
 	// Register websocket handler
 	router.HandleFunc("/websocket/{notebookId}", HandleWS)
-	router.HandleFunc("/notebooks", notebooks.NotebooksHandler)
-	router.HandleFunc("/notebooks/{notebookId}", notebooks.NotebookHandler)
+	router.HandleFunc("/api/v1/notebooks", notebooks.NotebooksHandler)
+	router.HandleFunc("/api/v1/notebooks/{notebookId}", notebooks.NotebookHandler)
 	// Root router route
 	http.Handle("/", router)
 	log.Printf("Listening on %v\n", *addr)
