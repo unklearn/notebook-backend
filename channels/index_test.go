@@ -29,7 +29,7 @@ func TestHandleMessageUnknownType(t *testing.T) {
 func TestContainerChannelExecuteCommand(t *testing.T) {
 	cc := NewContainerChannel("foo")
 	payload := []byte(`{"command": ["bash"]}`)
-	intents, e := cc.HandleMessage(string(ExecuteCommandEventName), payload)
+	intents, e := cc.HandleMessage(string(ContainerExecuteCommandEventName), payload)
 	assert.Equal(t, e, nil)
 	c, _ := commands.NewContainerExecuteCommandIntent("foo", payload)
 	assert.Equal(t, intents[0], c)
