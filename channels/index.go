@@ -27,10 +27,9 @@ func NewRootChannel(id string) *RootChannel {
 type RootChannelEventNames string
 
 const (
-	ContainerStartEventName   RootChannelEventNames = "container:start"
-	ContainerStopEventName    RootChannelEventNames = "container:stop"
-	ContainerStartedEventName RootChannelEventNames = "container:started"
-	ContainerStatusEventName  RootChannelEventNames = "container:status"
+	ContainerStartEventName  RootChannelEventNames = "root/container-start"
+	ContainerStopEventName   RootChannelEventNames = "root/container-stop"
+	ContainerStatusEventName RootChannelEventNames = "root/container-status"
 )
 
 // Return id for external callers
@@ -66,13 +65,27 @@ func NewContainerChannel(id string) *ContainerChannel {
 	return &ContainerChannel{id: id}
 }
 
+// A container conduit acts as a bidirectional communication channel between
+// the container and the webserver
+type BidirectionalContainerConduit struct {
+	// Used to refer to the running command, if required
+	ExecId string
+	// Used for stdout and stderr streams
+	ReadChan chan []byte
+	// Used for stdin
+	WriteChan chan []byte
+	// Used for communicating error codes etc
+	CommChan chan string
+}
+
 type ContainerChannelEventNames string
 
 const (
-	ContainerExecuteCommandEventName ContainerChannelEventNames = "container/execute:command"
-	ContainerCommandStatusEventName  ContainerChannelEventNames = "container/command:status"
-	ContainerReadFile                ContainerChannelEventNames = "container/read:file"
-	ContainerWriteToFile             ContainerChannelEventNames = "container/write:file"
+	ContainerExecuteCommandEventName      ContainerChannelEventNames = "container/execute-command"
+	ContainerCommandStatusEventName       ContainerChannelEventNames = "container/command-status"
+	ContainerCommandStatusOutputEventName ContainerChannelEventNames = "container/command-output"
+	ContainerReadFile                     ContainerChannelEventNames = "container/read-file"
+	ContainerWriteToFile                  ContainerChannelEventNames = "container/write-file"
 )
 
 // Return id for external callers

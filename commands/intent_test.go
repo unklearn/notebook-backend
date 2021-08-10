@@ -40,16 +40,17 @@ func TestContainerCommandCreateIntent(t *testing.T) {
 }
 
 func TestContainerExecuteCommandIntent(t *testing.T) {
-	i, e := NewContainerExecuteCommandIntent("foo", []byte(`{"interactive": false, "use_tty": true, "timeout": 123, "command": ["cat", ">", "oyo.py"]}`))
+	i, e := NewContainerExecuteCommandIntent("foo", []byte(`{"interactive": false, "cell_id": "bar", "use_tty": true, "timeout": 123, "command": ["cat", ">", "oyo.py"]}`))
 	assert.Equal(t, e, nil)
 	assert.Equal(t, i.ContainerId, "foo")
+	assert.Equal(t, i.CellId, "bar")
 	assert.Equal(t, i.Interactive, false)
 	assert.Equal(t, i.UseTty, true)
 	assert.Equal(t, i.Timeout, 123)
 	assert.Equal(t, i.Command, []string{"cat", ">", "oyo.py"})
 
 	// Try with missing values
-	i, e = NewContainerExecuteCommandIntent("foo", []byte(`{"command": ["bash"]}`))
+	i, e = NewContainerExecuteCommandIntent("foo", []byte(`{"command": ["bash"], "cell_id": "bar"}`))
 	assert.Equal(t, e, nil)
 	assert.Equal(t, i.ContainerId, "foo")
 	assert.Equal(t, i.Interactive, false)

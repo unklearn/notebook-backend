@@ -33,9 +33,10 @@ func NewCommandExecutor(cs IContainerCommandService, conn *connection.MxedWebsoc
 type IContainerCommandService interface {
 	CreateNew(ctx context.Context, intent commands.ContainerCreateCommandIntent) (containerId string, err error)
 	GetContainerStatus(ctx context.Context, containerId string) (status string, err error)
+	ExecuteContainerCommand(ctx context.Context, intent commands.ContainerExecuteCommandIntent) (*channels.BidirectionalContainerConduit, error)
 }
 
-func (ce CommandExecutor) CreateNewContainerSaga(intent commands.ContainerCreateCommandIntent) {
+func (ce CommandExecutor) createNewContainerSaga(intent commands.ContainerCreateCommandIntent) {
 	// Business logic is encapsulated in this saga
 	containerId, err := ce.IContainerCommandService.CreateNew(context.Background(), intent)
 	// Let conn know that new channel has been registered
@@ -43,7 +44,6 @@ func (ce CommandExecutor) CreateNewContainerSaga(intent commands.ContainerCreate
 	conn := ce.conn
 
 	if err != nil {
-		log.Println(err.Error())
 		// Write a message stating that container has failed
 		conn.WriteMessage(intent.ChannelId, string(channels.ContainerStatusEventName), failed)
 		return
@@ -54,13 +54,13 @@ func (ce CommandExecutor) CreateNewContainerSaga(intent commands.ContainerCreate
 	// Let conn know that new channel has been registered
 	response, _ := json.Marshal(commands.ContainerStatusResponse{Id: containerId, Status: "pending"})
 	// Write a message stating that container has started
-	conn.WriteMessage(intent.ChannelId, string(channels.ContainerStartedEventName), response)
+	conn.WriteMessage(intent.ChannelId, string(channels.ContainerStatusEventName), response)
 
 	// Wait for container status
-	go ce.WaitForContainerSaga(commands.ContainerWaitCommandIntent{ContainerId: containerId})
+	go ce.waitForContainerSaga(commands.ContainerWaitCommandIntent{ContainerId: containerId})
 }
 
-func (ce CommandExecutor) WaitForContainerSaga(intent commands.ContainerWaitCommandIntent) {
+func (ce CommandExecutor) waitForContainerSaga(intent commands.ContainerWaitCommandIntent) {
 	times := 0
 	timeout := intent.Timeout
 	if timeout == 0 {
@@ -95,6 +95,46 @@ func (ce CommandExecutor) WaitForContainerSaga(intent commands.ContainerWaitComm
 	}
 }
 
+func (ce CommandExecutor) executeContainerCommandSaga(intent commands.ContainerExecuteCommandIntent) {
+	conduit, err := ce.ExecuteContainerCommand(context.Background(), intent)
+	conn := ce.conn
+	if err != nil {
+		failed, _ := json.Marshal(commands.ContainerCommandStatusResponse{ExecId: conduit.ExecId, CellId: intent.CellId, Status: "failed", Reason: err.Error()})
+		// Write a message stating that container command execution has failed
+		conn.WriteMessage(intent.ContainerId, string(channels.ContainerCommandStatusEventName), failed)
+		return
+	}
+	// No wait here, some commands never send output
+	success, _ := json.Marshal(commands.ContainerCommandStatusResponse{ExecId: conduit.ExecId, CellId: intent.CellId, Status: "success"})
+	conn.WriteMessage(intent.ContainerId, string(channels.ContainerCommandStatusEventName), success)
+	// Run go-routines to wait on command output, and command input if interactive is true
+	if intent.Interactive {
+		go ce.listenForComandOutput(conduit, intent.ContainerId, intent.CellId)
+	}
+}
+
+func (ce CommandExecutor) listenForComandOutput(conduit *channels.BidirectionalContainerConduit, containerId string, cellId string) {
+	go func() {
+	L:
+		for {
+			select {
+			case read := <-conduit.ReadChan:
+				ce.conn.WriteMessage(cellId, string(channels.ContainerCommandStatusOutputEventName), read)
+				break
+			case cmd := <-conduit.CommChan:
+				// Parse command. If it is a close op, exit the loop and update status
+				// Other ops are pending
+				if cmd == "quit" {
+					stopped, _ := json.Marshal(commands.ContainerCommandStatusResponse{ExecId: conduit.ExecId, CellId: cellId, Status: "stopped"})
+					ce.conn.WriteMessage(containerId, string(channels.ContainerCommandStatusEventName), stopped)
+					break L
+				}
+				break
+			}
+		}
+	}()
+}
+
 // Executor channel <- receive intent and run it
 
 func (ce CommandExecutor) ExecuteIntents() {
@@ -103,10 +143,13 @@ func (ce CommandExecutor) ExecuteIntents() {
 		log.Printf("Handling intent %s\n", intent.ToString())
 		switch i := intent.(type) {
 		case commands.ContainerCreateCommandIntent:
-			ce.CreateNewContainerSaga(i)
+			ce.createNewContainerSaga(i)
 			continue
 		case commands.ContainerWaitCommandIntent:
-			ce.WaitForContainerSaga(i)
+			ce.waitForContainerSaga(i)
+			continue
+		case commands.ContainerExecuteCommandIntent:
+			ce.executeContainerCommandSaga(i)
 			continue
 		default:
 			log.Printf("Got typo %T\n", intent)

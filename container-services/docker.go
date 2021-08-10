@@ -1,8 +1,11 @@
 package containerservices
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"net"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -11,6 +14,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/unklearn/notebook-backend/channels"
 	"github.com/unklearn/notebook-backend/commands"
 )
 
@@ -122,19 +126,60 @@ func (dcs DockerContainerService) CreateNew(ctx context.Context, intent commands
 	return resp.ID, err
 }
 
-// func (dcs DockerContainerService) ExecuteCommand(ctx context.Context, containerId string, command []string, useTty bool) (ContainerCommandChannel, error) {
-// 	execConfig := types.ExecConfig{Tty: useTty, AttachStdout: true, AttachStderr: true, AttachStdin: true, Cmd: command}
-// 	respIdExecCreate, err := dcs.Client.ContainerExecCreate(ctx, containerId, execConfig)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-// 	respId, err := dcs.Client.ContainerExecAttach(ctx, respIdExecCreate.ID, types.ExecStartCheck{
-// 		Tty: useTty,
-// 	})
+func writeToHijackedResponseConn(writeChan chan []byte, conn net.Conn) {
+	for data := range writeChan {
+		conn.Write(data)
+	}
+}
 
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return ContainerCommandChannel{}, err
-// 	}
-// 	return ContainerCommandChannel{Id: containerId + "-" + respIdExecCreate.ID[:4], ContainerId: containerId, ExecConn: respId.Conn, ExecReader: respId.Reader}, nil
-// }
+func listenForHijackedResponseReader(readChan chan []byte, reader *bufio.Reader) {
+	// Listen for messages on exec-reader
+	b := make([]byte, 1024)
+	//ticker := time.NewTicker(time.Millisecond * 100)
+	for {
+		n, err := reader.Read(b)
+		if err == io.EOF {
+			break
+		}
+		// Wait for next set
+		// <-ticker.C
+		if len(b) > 0 {
+			readChan <- b[:n]
+		}
+	}
+}
+
+func wrapHijackedResponseIntoConduit(resp types.HijackedResponse, execId string) *channels.BidirectionalContainerConduit {
+	// TODO: Move into constructor func
+	readChan := make(chan []byte)
+	writeChan := make(chan []byte)
+	commChan := make(chan string)
+	conduit := channels.BidirectionalContainerConduit{
+		ReadChan:  readChan,
+		WriteChan: writeChan,
+		CommChan:  commChan,
+		ExecId:    execId,
+	}
+	// Run goroutines
+	go listenForHijackedResponseReader(conduit.ReadChan, resp.Reader)
+	// Writer to conn
+	go writeToHijackedResponseConn(conduit.WriteChan, resp.Conn)
+	return &conduit
+}
+
+func (dcs DockerContainerService) ExecuteContainerCommand(ctx context.Context, intent commands.ContainerExecuteCommandIntent) (*channels.BidirectionalContainerConduit, error) {
+	execConfig := types.ExecConfig{Tty: intent.UseTty, AttachStdout: true, AttachStderr: true, AttachStdin: intent.Interactive, Cmd: intent.Command}
+	respIdExecCreate, err := dcs.client.ContainerExecCreate(ctx, intent.ContainerId, execConfig)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := dcs.client.ContainerExecAttach(ctx, respIdExecCreate.ID, types.ExecStartCheck{
+		Tty: intent.UseTty,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	// Create a conduit
+	return wrapHijackedResponseIntoConduit(resp, respIdExecCreate.ID), nil
+}

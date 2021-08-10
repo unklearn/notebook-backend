@@ -114,6 +114,10 @@ func (i ContainerWaitCommandIntent) ToString() string {
 type ContainerExecuteCommandIntent struct {
 	// Id of container
 	ContainerId string `json:"-"`
+	// The id of the cell to correlate command execution inside notebook.
+	// without cell id, it is hard to identify which execId corresponds
+	// to which cell id
+	CellId string `json:"cell_id"`
 	// Whether command can accept stdin
 	Interactive bool `json:"interactive,omitempty"`
 	// Whether command requires tty

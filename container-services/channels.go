@@ -209,27 +209,6 @@ package containerservices
 // 	return ccc.ExecConn.Write(message)
 // }
 
-// func (ccc ContainerCommandChannel) Listen() {
-// 	// Listen for messages on exec-reader
-// 	b := make([]byte, 1024)
-// 	//ticker := time.NewTicker(time.Millisecond * 100)
-// 	id := ccc.Id
-// 	go func() {
-// 		for {
-// 			n, err := ccc.ExecReader.Read(b)
-// 			if err == io.EOF {
-// 				break
-// 			}
-// 			// Wait for next set
-// 			// <-ticker.C
-// 			if len(b) > 0 {
-// 				ccc.RootConn.WriteMessage(2, id, b[:n])
-// 			}
-// 		}
-// 		log.Println("Done reading from command")
-// 	}()
-// }
-
 // ///
 // /// root::{"Action":"start","Image":"python","Tag":"3.6"}
 // /// root::{"Action": "sync", "ContainerId": "af74"}
