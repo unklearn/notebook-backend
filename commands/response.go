@@ -2,6 +2,7 @@ package commands
 
 type ContainerStatusResponse struct {
 	Id     string `json:"id"`
+	Hash   string `json:"hash"`
 	Status string `json:"status"`
 }
 

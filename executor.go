@@ -40,7 +40,7 @@ func (ce CommandExecutor) createNewContainerSaga(intent commands.ContainerCreate
 	// Business logic is encapsulated in this saga
 	containerId, err := ce.IContainerCommandService.CreateNew(context.Background(), intent)
 	// Let conn know that new channel has been registered
-	failed, _ := json.Marshal(commands.ContainerStatusResponse{Id: containerId, Status: "failed"})
+	failed, _ := json.Marshal(commands.ContainerStatusResponse{Id: containerId, Hash: intent.Hash, Status: "failed"})
 	conn := ce.conn
 
 	if err != nil {
@@ -52,15 +52,15 @@ func (ce CommandExecutor) createNewContainerSaga(intent commands.ContainerCreate
 	conn.RegisterChannel(containerId, channels.NewContainerChannel(containerId))
 
 	// Let conn know that new channel has been registered
-	response, _ := json.Marshal(commands.ContainerStatusResponse{Id: containerId, Status: "pending"})
+	response, _ := json.Marshal(commands.ContainerStatusResponse{Id: containerId, Hash: intent.Hash, Status: "pending"})
 	// Write a message stating that container has started
 	conn.WriteMessage(intent.ChannelId, string(channels.ContainerStatusEventName), response)
 
 	// Wait for container status
-	go ce.waitForContainerSaga(commands.ContainerWaitCommandIntent{ContainerId: containerId})
+	go ce.waitForContainerSaga(intent.ChannelId, commands.ContainerWaitCommandIntent{ContainerId: containerId})
 }
 
-func (ce CommandExecutor) waitForContainerSaga(intent commands.ContainerWaitCommandIntent) {
+func (ce CommandExecutor) waitForContainerSaga(channelId string, intent commands.ContainerWaitCommandIntent) {
 	times := 0
 	timeout := intent.Timeout
 	if timeout == 0 {
@@ -75,20 +75,20 @@ func (ce CommandExecutor) waitForContainerSaga(intent commands.ContainerWaitComm
 		if e != nil {
 			statusResponse.Status = "error"
 			out, _ := json.Marshal(statusResponse)
-			conn.WriteMessage(intent.ContainerId, string(channels.ContainerStatusEventName), out)
+			conn.WriteMessage(channelId, string(channels.ContainerStatusEventName), out)
 			break
 		}
 		times += 1
 		if (times * sleepTime) > timeout {
 			statusResponse.Status = "timed-out"
 			out, _ := json.Marshal(statusResponse)
-			conn.WriteMessage(intent.ContainerId, string(channels.ContainerStatusEventName), out)
+			conn.WriteMessage(channelId, string(channels.ContainerStatusEventName), out)
 			break
 		}
 		if status == "running" {
 			statusResponse.Status = "running"
 			out, _ := json.Marshal(statusResponse)
-			conn.WriteMessage(intent.ContainerId, string(channels.ContainerStatusEventName), out)
+			conn.WriteMessage(channelId, string(channels.ContainerStatusEventName), out)
 			break
 		}
 		time.Sleep(time.Second * time.Duration(sleepTime))
@@ -104,6 +104,9 @@ func (ce CommandExecutor) executeContainerCommandSaga(intent commands.ContainerE
 		conn.WriteMessage(intent.ContainerId, string(channels.ContainerCommandStatusEventName), failed)
 		return
 	}
+	// Create new container command channel
+	ch := channels.NewContainerCommandChannel(intent.CellId, conduit)
+	conn.RegisterChannel(intent.CellId, ch)
 	// No wait here, some commands never send output
 	success, _ := json.Marshal(commands.ContainerCommandStatusResponse{ExecId: conduit.ExecId, CellId: intent.CellId, Status: "success"})
 	conn.WriteMessage(intent.ContainerId, string(channels.ContainerCommandStatusEventName), success)
@@ -117,10 +120,11 @@ func (ce CommandExecutor) listenForComandOutput(conduit *channels.BidirectionalC
 	go func() {
 	L:
 		for {
+		S:
 			select {
 			case read := <-conduit.ReadChan:
-				ce.conn.WriteMessage(cellId, string(channels.ContainerCommandStatusOutputEventName), read)
-				break
+				ce.conn.WriteMessage(cellId, string(channels.ContainerCommandOutputEventName), read)
+				break S
 			case cmd := <-conduit.CommChan:
 				// Parse command. If it is a close op, exit the loop and update status
 				// Other ops are pending
@@ -129,7 +133,7 @@ func (ce CommandExecutor) listenForComandOutput(conduit *channels.BidirectionalC
 					ce.conn.WriteMessage(containerId, string(channels.ContainerCommandStatusEventName), stopped)
 					break L
 				}
-				break
+				break S
 			}
 		}
 	}()
@@ -145,9 +149,9 @@ func (ce CommandExecutor) ExecuteIntents() {
 		case commands.ContainerCreateCommandIntent:
 			ce.createNewContainerSaga(i)
 			continue
-		case commands.ContainerWaitCommandIntent:
-			ce.waitForContainerSaga(i)
-			continue
+		// case commands.ContainerWaitCommandIntent:
+		// 	ce.waitForContainerSaga(i)
+		// 	continue
 		case commands.ContainerExecuteCommandIntent:
 			ce.executeContainerCommandSaga(i)
 			continue

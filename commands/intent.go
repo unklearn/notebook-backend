@@ -41,6 +41,8 @@ type ContainerCreateCommandIntent struct {
 	EnvVars []string `json:"env"`
 	// Start command to use
 	Command []string `json:"command"`
+	// Hash for tracking which request corresponds to failure
+	Hash string `json:"hash"`
 }
 
 func (i ContainerCreateCommandIntent) GetIntentName() string {
@@ -76,6 +78,9 @@ func NewContainerCreateCommandIntent(channelId string, payload []byte) (Containe
 	}
 	if len(i.Command) == 0 {
 		errors = append(errors, "`command` cannot be empty")
+	}
+	if i.Hash == "" {
+		errors = append(errors, "`hash` is a required field")
 	}
 	if len(errors) > 0 {
 		return i, fmt.Errorf(strings.Join(errors, "\n"))
