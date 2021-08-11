@@ -1,6 +1,6 @@
 # Unklearn Notebook Backeend
 
-Based on a React + Golang [prototype](https://unklearn.gatsbyjs.io/prototype_two/), this repo hosts the backend code required to author a notebook that can talk to containers via docker runtime. The backend can be found [here](https://github.com/unklearn/notebook-frontend)
+Based on a React + Golang [prototype](https://unklearn.gatsbyjs.io/prototype_two/), this repo hosts the backend code required to author a notebook that can talk to containers via docker runtime. The backend can be found [here](https://github.com/unklearn/notebook-fe)
 
 ## Development setup
 
