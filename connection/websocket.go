@@ -13,11 +13,12 @@ type MxedWebsocketConn struct {
 	// The underlying original websocket connection
 	conn     IWebsocketConn
 	protocol *MxedWebsocketSubprotocol
+	Id       string
 	*channels.Registry
 }
 
-func NewMxedWebsocketConn(conn IWebsocketConn) *MxedWebsocketConn {
-	return &MxedWebsocketConn{conn: conn, protocol: NewMxedWebsocketSubprotocol(), Registry: &channels.Registry{}}
+func NewMxedWebsocketConn(conn IWebsocketConn, id string) *MxedWebsocketConn {
+	return &MxedWebsocketConn{conn: conn, protocol: NewMxedWebsocketSubprotocol(), Id: id, Registry: &channels.Registry{}}
 }
 
 // Override the default write message to multiplex the message over a channelId. Messages

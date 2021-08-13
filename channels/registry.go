@@ -35,6 +35,7 @@ func (cr *Registry) DeregisterChannel(channelId string) (IChannel, error) {
 	}
 	ch, ok := cr.channelMap[channelId]
 	if ok {
+		log.Printf("Deregistering channel %s\n", channelId)
 		delete(cr.channelMap, channelId)
 		return ch, nil
 	}

@@ -24,7 +24,7 @@ func (f fakeWebsocketConn) ReadMessage() (messageType int, payload []byte, err e
 func TestMxedWebsocketWriteMessage(t *testing.T) {
 	f := &fakeWebsocketConn{intake: []byte("wohoo")}
 	sub := NewMxedWebsocketSubprotocol()
-	mx := NewMxedWebsocketConn(f)
+	mx := NewMxedWebsocketConn(f, "id")
 	mx.WriteMessage("chan", "some-event", []byte("woohoo"))
 	assert.Equal(t, f.intBuffer, sub.Encode("chan", "some-event", []byte("woohoo")))
 }
@@ -32,10 +32,11 @@ func TestMxedWebsocketWriteMessage(t *testing.T) {
 func TestMxedWebsocketRead(t *testing.T) {
 	sub := NewMxedWebsocketSubprotocol()
 	f := &fakeWebsocketConn{intake: sub.Encode("chan", "some-event", []byte("woohoo"))}
-	mx := NewMxedWebsocketConn(f)
+	mx := NewMxedWebsocketConn(f, "id")
 	d, err := mx.ReadMessage()
 	assert.Equal(t, err, nil)
 	assert.Equal(t, d.ChannelId, "chan")
+	assert.Equal(t, mx.Id, "id")
 	assert.Equal(t, d.EventName, "some-event")
 	assert.Equal(t, d.Payload, []byte("woohoo"))
 }

@@ -28,12 +28,13 @@ var upgrader = websocket.Upgrader{
 
 func HandleWS(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
-	// Maps execId to a multiplexed connection
-	mx := connection.NewMxedWebsocketConn(c)
 	// Use the path for registering channels to conn
 	vars := mux.Vars(r)
-	rootChName := vars["notebookId"]
-	mx.RegisterChannel(rootChName, channels.NewRootChannel(rootChName))
+	notebookId := vars["notebookId"]
+
+	// Maps execId to a multiplexed connection
+	mx := connection.NewMxedWebsocketConn(c, notebookId)
+	mx.RegisterChannel(notebookId, channels.NewRootChannel(notebookId))
 
 	if err != nil {
 		log.Print("upgrade error:", err)

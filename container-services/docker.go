@@ -183,3 +183,39 @@ func (dcs DockerContainerService) ExecuteContainerCommand(ctx context.Context, i
 	// Create a conduit
 	return wrapHijackedResponseIntoConduit(resp, respIdExecCreate.ID), nil
 }
+
+func (dcs DockerContainerService) ReadFile(ctx context.Context, intent commands.SyncFileIntent) ([]byte, error) {
+	// Execute sh + echo command and pipe output
+	execConfig := types.ExecConfig{Tty: true, AttachStdout: true, AttachStderr: true, AttachStdin: false, Cmd: []string{"cat", intent.FilePath}}
+	respIdExecCreate, err := dcs.client.ContainerExecCreate(ctx, intent.ContainerId, execConfig)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := dcs.client.ContainerExecAttach(ctx, respIdExecCreate.ID, types.ExecStartCheck{
+		Tty: true,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	// Run a go routine and wait for response
+	b := make([]byte, 1024)
+	var contents []byte
+	for {
+		n, err := resp.Reader.Read(b)
+		if err == io.EOF {
+			break
+		}
+
+		if len(b) > 0 {
+			if contents == nil {
+				contents = b[:n]
+			} else {
+
+				contents = append(contents, b[:n]...)
+			}
+			// contents = append(contents, []byte("\r\n")...)
+		}
+	}
+	return contents, nil
+}

@@ -70,7 +70,8 @@ type ContainerChannelEventNames string
 const (
 	ContainerExecuteCommandEventName ContainerChannelEventNames = "container/execute-command"
 	ContainerCommandStatusEventName  ContainerChannelEventNames = "container/command-status"
-	ContainerReadFile                ContainerChannelEventNames = "container/read-file"
+	ContainerSyncFileEventName       ContainerChannelEventNames = "container/sync-file"
+	ContainerSyncFileOutputEventName ContainerChannelEventNames = "container/file-output"
 	ContainerWriteToFile             ContainerChannelEventNames = "container/write-file"
 )
 
@@ -86,6 +87,13 @@ func (cc ContainerChannel) HandleMessage(eventName string, payload []byte) ([]co
 	case string(ContainerExecuteCommandEventName):
 		// Parse body into StartContainer
 		c, e := commands.NewContainerExecuteCommandIntent(cc.id, payload)
+		if e != nil {
+			return []commands.ActionIntent{}, e
+		}
+		return []commands.ActionIntent{c}, nil
+	case string(ContainerSyncFileEventName):
+		// Sync file to/from the container.
+		c, e := commands.NewSyncFileIntent(cc.id, payload)
 		if e != nil {
 			return []commands.ActionIntent{}, e
 		}

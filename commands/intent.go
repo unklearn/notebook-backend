@@ -153,3 +153,44 @@ func NewContainerExecuteCommandIntent(containerId string, payload []byte) (Conta
 	}
 	return c, nil
 }
+
+// SyncFileIntent syncs the file from server onto the client
+type SyncFileIntent struct {
+	// Id of the container
+	ContainerId string `json:"-"`
+	// Path to file including extension
+	FilePath string `json:"file_path"`
+	// Id of the cell
+	CellId string `json:"cell_id"`
+	// Optional content if notebook is writing in
+	Content string `json:"content,omitempty"`
+}
+
+func (i SyncFileIntent) GetIntentName() string {
+	return "SyncFileIntent"
+}
+
+func (i SyncFileIntent) ToString() string {
+	return fmt.Sprintf("%#v", i)
+}
+
+// Constructor function for sync file intent
+func NewSyncFileIntent(containerId string, payload []byte) (SyncFileIntent, error) {
+	si := SyncFileIntent{}
+	err := json.Unmarshal(payload, &si)
+	if err != nil {
+		return si, err
+	}
+	errors := []string{}
+	if len(si.FilePath) == 0 {
+		errors = append(errors, "`file_path` cannot be empty")
+	}
+	if si.CellId == "" {
+		errors = append(errors, "`cell_id` is a required field")
+	}
+	if len(errors) > 0 {
+		return si, fmt.Errorf(strings.Join(errors, "\n"))
+	}
+	si.ContainerId = containerId
+	return si, nil
+}

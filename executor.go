@@ -34,6 +34,7 @@ type IContainerCommandService interface {
 	CreateNew(ctx context.Context, intent commands.ContainerCreateCommandIntent) (containerId string, err error)
 	GetContainerStatus(ctx context.Context, containerId string) (status string, err error)
 	ExecuteContainerCommand(ctx context.Context, intent commands.ContainerExecuteCommandIntent) (*channels.BidirectionalContainerConduit, error)
+	ReadFile(ctx context.Context, intent commands.SyncFileIntent) (contents []byte, err error)
 }
 
 func (ce CommandExecutor) createNewContainerSaga(intent commands.ContainerCreateCommandIntent) {
@@ -139,6 +140,23 @@ func (ce CommandExecutor) listenForComandOutput(conduit *channels.BidirectionalC
 	}()
 }
 
+func (ce CommandExecutor) syncFileSaga(intent commands.SyncFileIntent) {
+	if len(intent.Content) == 0 {
+		// Read file contents using cat and write to underlying container channel
+		output, err := ce.ReadFile(context.Background(), intent)
+		fileResponse := commands.SyncFileResponse{NotebookId: ce.conn.Id, FilePath: intent.FilePath, CellId: intent.CellId, Error: "", Content: ""}
+		if err != nil {
+			fileResponse.Error = err.Error()
+		} else {
+			fileResponse.Content = string(output)
+		}
+		resp, _ := json.Marshal(fileResponse)
+		ce.conn.WriteMessage(intent.ContainerId, string(channels.ContainerSyncFileOutputEventName), resp)
+	} else {
+		panic("cannot write to file yet")
+	}
+}
+
 // Executor channel <- receive intent and run it
 
 func (ce CommandExecutor) ExecuteIntents() {
@@ -154,6 +172,9 @@ func (ce CommandExecutor) ExecuteIntents() {
 		// 	continue
 		case commands.ContainerExecuteCommandIntent:
 			ce.executeContainerCommandSaga(i)
+			continue
+		case commands.SyncFileIntent:
+			ce.syncFileSaga(i)
 			continue
 		default:
 			log.Printf("Got typo %T\n", intent)

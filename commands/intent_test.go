@@ -61,3 +61,19 @@ func TestContainerExecuteCommandIntent(t *testing.T) {
 	_, e = NewContainerExecuteCommandIntent("foo", []byte(`{}`))
 	assert.Equal(t, e.Error(), "command cannot be empty")
 }
+
+func TestNewSyncFileIntent(t *testing.T) {
+	i, _ := NewSyncFileIntent("containerId", []byte(`{"cell_id": "cid", "file_path":"/var/app.py", "content":"foo"}`))
+	assert.Equal(t, i.ContainerId, "containerId")
+	assert.Equal(t, i.CellId, "cid")
+	assert.Equal(t, i.FilePath, "/var/app.py")
+	assert.Equal(t, i.Content, "foo")
+
+	// Try with error
+	_, e := NewSyncFileIntent("containerId", []byte(`{"cell_id": "cid"}`))
+	assert.NotEqual(t, e, nil)
+	assert.Equal(t, e.Error(), "`file_path` cannot be empty")
+	_, e = NewSyncFileIntent("containerId", []byte(`{"file_path": "/var/app.py"}`))
+	assert.NotEqual(t, e, nil)
+	assert.Equal(t, e.Error(), "`cell_id` is a required field")
+}

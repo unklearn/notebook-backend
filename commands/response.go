@@ -12,3 +12,11 @@ type ContainerCommandStatusResponse struct {
 	Status string `json:"status"`
 	Reason string `json:"reason"`
 }
+
+type SyncFileResponse struct {
+	NotebookId string `json:"notebook_id"`
+	FilePath   string `json:"file_path"`
+	Content    string `json:"content"`
+	CellId     string `json:"cell_id"`
+	Error      string `json:"error,omitempty"`
+}
