@@ -3,6 +3,8 @@ package notebooks
 import (
 	"encoding/json"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/spf13/afero"
@@ -16,7 +18,7 @@ type NotebookCRUDService struct {
 func NewNotebookCRUDService(dbDir string) *NotebookCRUDService {
 	var AppFs = afero.NewOsFs()
 	// dir := afero.GetTempDir(AppFs, "notebooks")
-	dir := "/tmp/notebooks"
+	dir := "/usr/local/var/notebooks"
 	log.Printf("Using directory %s\n", dir)
 	return &NotebookCRUDService{fs: AppFs, rootDir: dir}
 }
@@ -35,6 +37,26 @@ func (nb *NotebookCRUDService) Create(payload map[string]interface{}) (map[strin
 		return nil, err
 	}
 	return payload, err
+}
+
+// Update a notebook by saving its new contents
+func (nb *NotebookCRUDService) Update(notebookId string, payload map[string]interface{}) (map[string]interface{}, error) {
+	notebookFilePath := filepath.Join(nb.rootDir, sanitizeNotebookId(notebookId))
+	_, err := nb.fs.Stat(notebookFilePath)
+	if err != nil {
+		return nil, err
+	} else {
+		file, err := nb.fs.OpenFile(notebookFilePath, os.O_WRONLY, os.ModePerm)
+		if err != nil {
+			return nil, err
+		}
+		contents, _ := json.Marshal(payload)
+		_, err = file.Write(contents)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	}
 }
 
 // Fetch a notebook by its id and return the notebook contents or error

@@ -45,6 +45,21 @@ func handleNotebookGet(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, n)
 }
 
+func handleNotebookUpdate(w http.ResponseWriter, r *http.Request) {
+	p := make([]byte, r.ContentLength)
+	r.Body.Read(p)
+	var payload map[string]interface{}
+	vars := mux.Vars(r)
+	notebookId := vars["notebookId"]
+	json.Unmarshal(p, &payload)
+	nb, err := nbService.Update(notebookId, payload)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid notebook payload")
+		return
+	}
+	respondWithJSON(w, http.StatusOK, nb)
+}
+
 func NotebooksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
@@ -56,5 +71,7 @@ func NotebookHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		handleNotebookGet(w, r)
+	case "PUT":
+		handleNotebookUpdate(w, r)
 	}
 }
